@@ -1265,6 +1265,19 @@ document.getElementById('magic-sync-no').addEventListener('click', () => {
   document.getElementById('magic-sync-overlay').style.display = 'none';
 });
 
+// ── IDLE CURSOR ────────────────────────────────────────────────────────────
+let cursorTimer = null;
+function resetCursorTimer() {
+  document.body.style.cursor = 'default';
+  clearTimeout(cursorTimer);
+  cursorTimer = setTimeout(() => {
+    document.body.style.cursor = 'none';
+  }, 30000);
+}
+document.addEventListener('mousemove', resetCursorTimer);
+document.addEventListener('mousedown', resetCursorTimer);
+resetCursorTimer();
+
 // ── WAKE LOCK ──────────────────────────────────────────────────────────────
 let wakeLock = null;
 const wakeLockBtn = document.getElementById('wakelock-btn');
