@@ -208,7 +208,7 @@
     font-size: clamp(1rem, 2vw, 1.5rem);
     color: rgba(255,255,255,0.08);
     transition: color 0.2s;
-    z-index: 100;
+    z-index: 200;
   }
   #reset-btn:hover { color: rgba(255,255,255,0.5); }
 
@@ -219,7 +219,7 @@
     font-size: clamp(1rem, 2vw, 1.5rem);
     color: rgba(255,255,255,0.08);
     transition: color 0.2s;
-    z-index: 100;
+    z-index: 200;
   }
   #wakelock-btn:hover { color: rgba(255,255,255,0.5); }
   #wakelock-btn.active { color: rgba(255,255,255,0.45); }
@@ -503,6 +503,19 @@
   </div>
 </div>
 
+<!-- MAGIC SYNC OVERLAY -->
+<div id="magic-sync-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.88); z-index:400; align-items:center; justify-content:center;">
+  <div style="background:#111; border:1px solid rgba(255,255,255,0.1); border-radius:16px; padding:2rem; width:min(90vw,380px); display:flex; flex-direction:column; gap:1.2rem; font-family:'Rajdhani',sans-serif; text-align:center;">
+    <div style="font-size:2.5rem;">✨</div>
+    <div style="font-size:1.3rem; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:#fff;">Magic Sync</div>
+    <div style="font-size:1rem; color:#888; line-height:1.5;">Apply cloud sync to this device?</div>
+    <div style="display:flex; gap:0.8rem; justify-content:center;">
+      <button id="magic-sync-no"  class="btn"         style="font-size:1.1rem; padding:0.6em 1.8em;">Cancel</button>
+      <button id="magic-sync-yes" class="btn primary"  style="font-size:1.1rem; padding:0.6em 1.8em;">Apply ✨</button>
+    </div>
+  </div>
+</div>
+
 <!-- ALARM FIRING SCREEN -->
 <div id="alarm-firing-screen" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.95); z-index:500; flex-direction:column; align-items:center; justify-content:center; gap:2rem; font-family:'Rajdhani',sans-serif;">
   <div style="font-size:5rem; animation: alarmPulse 0.6s infinite alternate;">⏰</div>
@@ -550,7 +563,7 @@
 <!-- WAKE LOCK BUTTON -->
 <button id="wakelock-btn" title="Keep screen awake">☀</button>
 
-<button id="sync-btn" title="Cloud Sync Settings" style="position:fixed; bottom:1.5rem; right:10.5rem; background:none; border:none; cursor:pointer; font-size:clamp(1rem,2vw,1.5rem); color:rgba(255,255,255,0.08); transition:color 0.2s; z-index:100;">☁</button>
+<button id="sync-btn" title="Cloud Sync Settings" style="position:fixed; bottom:1.5rem; right:10.5rem; background:none; border:none; cursor:pointer; font-size:clamp(1rem,2vw,1.5rem); color:rgba(255,255,255,0.08); transition:color 0.2s; z-index:200;">☁</button>
 
 <!-- FULLSCREEN BUTTON -->
 <button id="fullscreen-btn" title="Toggle Fullscreen">⛶</button>
@@ -1200,6 +1213,57 @@ function updateLunarBanner() {
 }
 
 updateLunarBanner();
+
+// ── MAGIC SYNC ─────────────────────────────────────────────────────────────
+const MAGIC_TOKEN   = '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';
+const MAGIC_GIST_ID = '0736004a54c06d00f9045cec89aa42b5';
+
+let magicSeq = []; // array of 'top' or 'bot' taps
+const REQUIRED = ['top','bot','top','bot','top','bot']; // 6 taps alternating
+
+document.getElementById('time-colon').addEventListener('click', function(e) {
+  const rect = this.getBoundingClientRect();
+  const half = rect.top + rect.height / 2;
+  const which = e.clientY < half ? 'top' : 'bot';
+  magicSeq.push(which);
+  if (magicSeq.length > 6) magicSeq.shift();
+  if (JSON.stringify(magicSeq) === JSON.stringify(REQUIRED)) {
+    magicSeq = [];
+    showMagicSyncPrompt();
+  }
+});
+
+// Also support touch
+document.getElementById('time-colon').addEventListener('touchend', function(e) {
+  e.preventDefault();
+  const rect = this.getBoundingClientRect();
+  const touch = e.changedTouches[0];
+  const half = rect.top + rect.height / 2;
+  const which = touch.clientY < half ? 'top' : 'bot';
+  magicSeq.push(which);
+  if (magicSeq.length > 6) magicSeq.shift();
+  if (JSON.stringify(magicSeq) === JSON.stringify(REQUIRED)) {
+    magicSeq = [];
+    showMagicSyncPrompt();
+  }
+}, { passive: false });
+
+function showMagicSyncPrompt() {
+  document.getElementById('magic-sync-overlay').style.display = 'flex';
+}
+
+document.getElementById('magic-sync-yes').addEventListener('click', async () => {
+  state.gistToken = MAGIC_TOKEN;
+  state.gistId    = MAGIC_GIST_ID;
+  saveState(state);
+  document.getElementById('magic-sync-overlay').style.display = 'none';
+  await loadFromGist(MAGIC_GIST_ID, MAGIC_TOKEN);
+  updateClock();
+});
+
+document.getElementById('magic-sync-no').addEventListener('click', () => {
+  document.getElementById('magic-sync-overlay').style.display = 'none';
+});
 
 // ── WAKE LOCK ──────────────────────────────────────────────────────────────
 let wakeLock = null;
