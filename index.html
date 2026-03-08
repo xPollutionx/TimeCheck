@@ -199,12 +199,118 @@
   #wakelock-btn.active { color: rgba(255,255,255,0.45); }
 
 
-  .draggable {
-    cursor: move;
-    outline: 1px dashed rgba(255,255,255,0.12);
-    border-radius: 4px;
-    padding: 4px 8px;
+  /* Resize handle - appears on unlocked elements */
+  .draggable { cursor: move; outline: 1px dashed rgba(255,255,255,0.12); border-radius: 4px; padding: 4px 8px; }
+  .resize-handle {
+    position: absolute;
+    bottom: -6px; right: -6px;
+    width: 14px; height: 14px;
+    background: rgba(255,255,255,0.3);
+    border-radius: 3px;
+    cursor: se-resize;
+    display: none;
+    z-index: 60;
   }
+  .draggable .resize-handle { display: block; }
+  .draggable-target { position: relative; }
+
+  /* Countdown timers — circular stopwatch style */
+  #countdown-container {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 1.8em;
+    margin-top: 0.6em;
+    pointer-events: auto;
+  }
+  .countdown-clock {
+    position: relative;
+    width: clamp(100px, 16vw, 150px);
+    height: clamp(100px, 16vw, 150px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.1em;
+  }
+  /* Crown button at top */
+  .countdown-crown {
+    position: absolute;
+    top: -10px; left: 50%; transform: translateX(-50%);
+    width: 10px; height: 14px;
+    background: rgba(255,255,255,0.3);
+    border-radius: 3px 3px 0 0;
+    border: none;
+    cursor: default;
+    z-index: 3;
+  }
+  /* Cancel X at top inside ring */
+  .countdown-cancel {
+    position: absolute;
+    top: 14px;
+    left: 50%; transform: translateX(-50%);
+    background: rgba(255,0,0,0.12);
+    border: 1px solid rgba(255,80,80,0.3);
+    border-radius: 50%;
+    color: rgba(255,100,100,0.7);
+    font-size: 0.65rem;
+    width: 18px; height: 18px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    z-index: 2;
+    transition: background 0.2s;
+  }
+  .countdown-cancel:hover { background: rgba(255,0,0,0.3); color:#fff; }
+  .countdown-clock svg {
+    position: absolute;
+    inset: 0;
+    width: 100%; height: 100%;
+    transform: rotate(-90deg);
+  }
+  .countdown-clock svg circle { fill: none; stroke-width: 3; }
+  .countdown-clock svg .track    { stroke: rgba(255,255,255,0.08); }
+  .countdown-clock svg .progress { stroke: rgba(255,255,255,0.55); stroke-linecap: round; transition: stroke-dashoffset 1s linear; }
+  .countdown-time {
+    font-family: 'AlarmClock', monospace;
+    font-size: clamp(0.9rem, 2.4vw, 1.3rem);
+    color: #fff;
+    letter-spacing: 0.02em;
+    z-index: 1;
+  }
+  .countdown-name {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: clamp(0.5rem, 1.1vw, 0.75rem);
+    color: rgba(255,255,255,0.45);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    z-index: 1;
+    max-width: 78%;
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* HIDE button centered at bottom inside ring */
+  .countdown-hide-btn {
+    position: absolute;
+    bottom: 12px;
+    left: 50%; transform: translateX(-50%);
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 8px;
+    color: rgba(255,255,255,0.5);
+    font-size: 0.55rem;
+    cursor: pointer;
+    padding: 2px 8px;
+    letter-spacing: 0.1em;
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 600;
+    text-transform: uppercase;
+    transition: background 0.2s;
+    z-index: 2;
+    white-space: nowrap;
+  }
+  .countdown-hide-btn:hover { background: rgba(255,255,255,0.18); color: #fff; }
 
   /* ── CALENDAR VIEW ── */
   #cal-view {
@@ -447,7 +553,8 @@
     <span id="tomorrow-text">Events Tomorrow: 0</span>
     <button class="mute-btn" id="mute-tomorrow" title="Mute">🔇</button>
   </div>
-  <button id="alarm-btn" title="Alarms">⏱</button>
+  <button id="alarm-btn" class="draggable-target" data-key="alarm-btn" title="Alarms">⏱</button>
+  <div id="countdown-container" class="draggable-target" data-key="countdowns"></div>
 </div>
 
 <!-- CALENDAR VIEW -->
@@ -501,21 +608,52 @@
 </div>
 
 <!-- ALARM POPUP -->
-<div id="alarm-popup" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:300; align-items:center; justify-content:center;">
-  <div style="background:#111; border:1px solid rgba(255,255,255,0.1); border-radius:16px; padding:2rem; width:min(90vw,420px); display:flex; flex-direction:column; gap:1rem; font-family:'Rajdhani',sans-serif;">
-    <h3 style="font-size:1.4rem; letter-spacing:0.12em; text-transform:uppercase; color:#fff; text-align:center;">⏱ Set Alarm</h3>
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.6rem;">
-      <button class="alarm-quick btn" data-mins="15">15 min</button>
-      <button class="alarm-quick btn" data-mins="30">30 min</button>
-      <button class="alarm-quick btn" data-mins="45">45 min</button>
-      <button class="alarm-quick btn" data-mins="60">1 hr</button>
+<div id="alarm-popup" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.88); z-index:300; align-items:center; justify-content:center;">
+  <div style="background:#0e0e0e; border:1px solid rgba(255,255,255,0.08); border-radius:16px; padding:1.5rem; width:min(92vw,380px); display:flex; flex-direction:column; gap:0.9rem; font-family:'Rajdhani',sans-serif;">
+
+    <!-- Digital display -->
+    <div style="background:#000; border:2px solid rgba(255,255,255,0.06); border-radius:8px; padding:0.6em 1em; text-align:center; position:relative;">
+      <div id="mw-display" style="font-family:'AlarmClock',monospace; font-size:2.8rem; color:#00ff99; letter-spacing:0.1em; min-height:1.2em;">0:00</div>
+      <div id="mw-name-display" style="font-size:0.8rem; color:rgba(0,255,153,0.5); letter-spacing:0.12em; text-transform:uppercase; min-height:1em;"></div>
     </div>
+
+    <!-- Name input -->
+    <input id="alarm-name-input" type="text" inputmode="text" placeholder="Name (optional — e.g. Pizza)" maxlength="30"
+      style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:6px; color:#fff; font-family:'Rajdhani',sans-serif; font-size:1rem; padding:0.45em 0.8em; outline:none; width:100%; box-sizing:border-box;">
+
+    <!-- Numpad -->
+    <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:0.5rem;">
+      <button class="mw-key btn" data-val="1">1</button>
+      <button class="mw-key btn" data-val="2">2</button>
+      <button class="mw-key btn" data-val="3">3</button>
+      <button class="mw-key btn" data-val="4">4</button>
+      <button class="mw-key btn" data-val="5">5</button>
+      <button class="mw-key btn" data-val="6">6</button>
+      <button class="mw-key btn" data-val="7">7</button>
+      <button class="mw-key btn" data-val="8">8</button>
+      <button class="mw-key btn" data-val="9">9</button>
+      <button class="mw-key btn" id="mw-clear" style="color:rgba(255,100,100,0.7);">C</button>
+      <button class="mw-key btn" data-val="0">0</button>
+      <button class="mw-key btn" id="mw-enter" style="background:rgba(0,255,153,0.1); color:#00ff99; border-color:rgba(0,255,153,0.2);">SET</button>
+    </div>
+
+    <!-- Quick presets -->
+    <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:0.4rem;">
+      <button class="alarm-quick btn" data-mins="15" style="font-size:0.85rem;">15 min</button>
+      <button class="alarm-quick btn" data-mins="30" style="font-size:0.85rem;">30 min</button>
+      <button class="alarm-quick btn" data-mins="45" style="font-size:0.85rem;">45 min</button>
+      <button class="alarm-quick btn" data-mins="60" style="font-size:0.85rem;">1 hr</button>
+    </div>
+
+    <!-- Custom time -->
     <div style="display:flex; gap:0.5rem; align-items:center;">
-      <input id="alarm-custom-input" type="time" style="flex:1; background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.15); border-radius:6px; color:#fff; font-family:'Rajdhani',sans-serif; font-size:1.1rem; padding:0.5em 0.8em; outline:none; colorscheme:dark;">
-      <button class="btn primary" id="alarm-custom-set">Set Custom</button>
+      <input id="alarm-custom-input" type="time" style="flex:1; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:6px; color:#fff; font-family:'Rajdhani',sans-serif; font-size:1rem; padding:0.4em 0.7em; outline:none; color-scheme:dark;">
+      <button class="btn primary" id="alarm-custom-set" style="white-space:nowrap;">Set Time</button>
     </div>
-    <div id="alarm-list" style="display:flex; flex-direction:column; gap:0.4rem; max-height:180px; overflow-y:auto;"></div>
-    <button class="btn" id="alarm-close" style="margin-top:0.5rem;">Close</button>
+
+    <!-- Active alarms -->
+    <div id="alarm-list" style="display:flex; flex-direction:column; gap:0.4rem; max-height:160px; overflow-y:auto;"></div>
+    <button class="btn" id="alarm-close">Close</button>
   </div>
 </div>
 
@@ -833,10 +971,12 @@ function applyPositions() {
       el.style.position = 'fixed';
       el.style.left = saved.x + 'px';
       el.style.top  = saved.y + 'px';
+      if (saved.scale) el.style.transform = `scale(${saved.scale})`;
     } else {
       el.style.position = '';
       el.style.left = '';
       el.style.top = '';
+      el.style.transform = '';
     }
   });
 }
@@ -846,11 +986,23 @@ function applyLock() {
   if (state.locked) {
     lockBtn.textContent = '🔒';
     lockBtn.classList.remove('unlocked');
-    targets.forEach(el => el.classList.remove('draggable'));
+    targets.forEach(el => {
+      el.classList.remove('draggable');
+      const h = el.querySelector('.resize-handle');
+      if (h) h.remove();
+    });
   } else {
     lockBtn.textContent = '🔓';
     lockBtn.classList.add('unlocked');
-    targets.forEach(el => el.classList.add('draggable'));
+    targets.forEach(el => {
+      el.classList.add('draggable');
+      if (!el.querySelector('.resize-handle')) {
+        const h = document.createElement('div');
+        h.className = 'resize-handle';
+        h.title = 'Resize';
+        el.appendChild(h);
+      }
+    });
   }
   applyPositions();
 }
@@ -926,6 +1078,71 @@ document.addEventListener('touchend', () => {
   dragging = null;
 });
 
+// ── RESIZE LOGIC ───────────────────────────────────────────────────────────
+let resizing = null, resizeStartX = 0, resizeStartScale = 1;
+
+function getScale(el) {
+  const key = el.dataset.key;
+  return (state.positions && state.positions[key] && state.positions[key].scale) || 1;
+}
+
+document.addEventListener('mousedown', e => {
+  if (state.locked) return;
+  const h = e.target.closest('.resize-handle');
+  if (!h) return;
+  resizing = h.parentElement;
+  resizeStartX = e.clientX;
+  resizeStartScale = getScale(resizing);
+  e.preventDefault();
+  e.stopPropagation();
+});
+
+document.addEventListener('mousemove', e => {
+  if (!resizing) return;
+  const dx = e.clientX - resizeStartX;
+  const scale = Math.max(0.3, Math.min(4, resizeStartScale + dx / 200));
+  resizing.style.transform = `scale(${scale})`;
+});
+
+document.addEventListener('mouseup', e => {
+  if (!resizing) return;
+  const key = resizing.dataset.key;
+  if (!state.positions) state.positions = {};
+  if (!state.positions[key]) state.positions[key] = { x: 0, y: 0 };
+  const scaleMatch = resizing.style.transform.match(/scale\(([^)]+)\)/);
+  state.positions[key].scale = scaleMatch ? parseFloat(scaleMatch[1]) : 1;
+  saveState(state);
+  resizing = null;
+});
+
+// Touch resize
+document.addEventListener('touchstart', e => {
+  if (state.locked) return;
+  const h = e.target.closest('.resize-handle');
+  if (!h) return;
+  resizing = h.parentElement;
+  resizeStartX = e.touches[0].clientX;
+  resizeStartScale = getScale(resizing);
+}, { passive: true });
+
+document.addEventListener('touchmove', e => {
+  if (!resizing) return;
+  const dx = e.touches[0].clientX - resizeStartX;
+  const scale = Math.max(0.3, Math.min(4, resizeStartScale + dx / 200));
+  resizing.style.transform = `scale(${scale})`;
+}, { passive: true });
+
+document.addEventListener('touchend', () => {
+  if (!resizing) return;
+  const key = resizing.dataset.key;
+  if (!state.positions) state.positions = {};
+  if (!state.positions[key]) state.positions[key] = { x: 0, y: 0 };
+  const scaleMatch = resizing.style.transform.match(/scale\(([^)]+)\)/);
+  state.positions[key].scale = scaleMatch ? parseFloat(scaleMatch[1]) : 1;
+  saveState(state);
+  resizing = null;
+});
+
 // ── RESET LAYOUT ───────────────────────────────────────────────────────────
 document.getElementById('reset-btn').addEventListener('click', () => {
   state.positions = {};
@@ -934,6 +1151,7 @@ document.getElementById('reset-btn').addEventListener('click', () => {
     el.style.position = '';
     el.style.left = '';
     el.style.top = '';
+    el.style.transform = '';
   });
 });
 
@@ -964,7 +1182,45 @@ setInterval(() => {
   if (state.cloudSync) loadFromCloud();
 }, 60000);
 
-// ── ALARMS ─────────────────────────────────────────────────────────────────
+// ── MICROWAVE NUMPAD ───────────────────────────────────────────────────────
+let mwInput = ''; // up to 4 digits: HHMM or MM
+
+function mwUpdateDisplay() {
+  const digits = mwInput.padStart(4, ' ');
+  // interpret as MM:SS if <=4 digits
+  const raw = mwInput || '0';
+  const totalMins = parseInt(raw) || 0;
+  const h = Math.floor(totalMins / 60);
+  const m = totalMins % 60;
+  const display = h > 0 ? `${h}:${String(m).padStart(2,'0')}` : `${m}:00`;
+  document.getElementById('mw-display').textContent = display;
+  const name = document.getElementById('alarm-name-input').value.trim();
+  document.getElementById('mw-name-display').textContent = name || '';
+}
+
+document.querySelectorAll('.mw-key[data-val]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (mwInput.length >= 4) return;
+    mwInput += btn.dataset.val;
+    mwUpdateDisplay();
+  });
+});
+
+document.getElementById('mw-clear').addEventListener('click', () => {
+  mwInput = '';
+  mwUpdateDisplay();
+});
+
+document.getElementById('mw-enter').addEventListener('click', () => {
+  const totalMins = parseInt(mwInput) || 0;
+  if (totalMins <= 0) return;
+  const name = document.getElementById('alarm-name-input').value.trim();
+  addAlarm(totalMins * 60000, name || `${totalMins} min`);
+  mwInput = '';
+  mwUpdateDisplay();
+  document.getElementById('alarm-name-input').value = '';
+  alarmPopup.style.display = 'none';
+});
 if (!state.alarms) { state.alarms = []; saveState(state); }
 
 // Web Audio alarm sound — loud, aggressive, escalating
@@ -1081,11 +1337,21 @@ function renderAlarmList() {
     state.alarms.forEach((a, i) => {
       const d = new Date(a.time);
       const label = d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+      const muted = a.muted;
       const row = document.createElement('div');
       row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:0.4em 0.7em;background:rgba(255,255,255,0.05);border-radius:6px;font-size:1rem;color:#fff;gap:0.5em;';
-      row.innerHTML = `<span>⏰ ${label} — ${a.label}</span><button style="background:none;border:none;color:rgba(255,255,255,0.3);cursor:pointer;font-size:1rem;">✕</button>`;
-      row.querySelector('button').addEventListener('click', () => {
-        state.alarms.splice(i, 1); saveState(state); renderAlarmList(); updateAlarmBtn();
+      row.innerHTML = `
+        <span style="opacity:${muted?0.4:1}">⏰ ${label} — ${a.label}</span>
+        <div style="display:flex;gap:0.5em;">
+          <button class="mute-toggle" style="background:none;border:none;color:rgba(255,255,255,0.4);cursor:pointer;font-size:1rem;" title="${muted?'Unmute':'Mute'}">${muted?'🔕':'🔇'}</button>
+          <button class="del-alarm" style="background:none;border:none;color:rgba(255,255,255,0.3);cursor:pointer;font-size:1rem;">✕</button>
+        </div>`;
+      row.querySelector('.mute-toggle').addEventListener('click', () => {
+        state.alarms[i].muted = !state.alarms[i].muted;
+        saveState(state); renderAlarmList(); renderCountdowns();
+      });
+      row.querySelector('.del-alarm').addEventListener('click', () => {
+        state.alarms.splice(i, 1); saveState(state); renderAlarmList(); renderCountdowns(); updateAlarmBtn();
       });
       list.appendChild(row);
     });
@@ -1098,12 +1364,87 @@ function updateAlarmBtn() {
 }
 
 function addAlarm(ms, label) {
-  const time = Date.now() + ms;
-  state.alarms.push({ time, label });
+  const now = Date.now();
+  const time = now + ms;
+  state.alarms.push({ time, label, muted: false, total: ms, setAt: now });
   state.alarms.sort((a,b) => a.time - b.time);
   saveState(state);
   renderAlarmList();
+  renderCountdowns();
 }
+
+// ── COUNTDOWNS ─────────────────────────────────────────────────────────────
+function formatCountdown(ms) {
+  if (ms <= 0) return '00:00';
+  const h = Math.floor(ms / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  const s = Math.floor((ms % 60000) / 1000);
+  if (h > 0) return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+
+function renderCountdowns() {
+  const container = document.getElementById('countdown-container');
+  container.innerHTML = '';
+  const now = Date.now();
+  (state.alarms || []).forEach((a, i) => {
+    if (a.muted) return;
+    const remaining = Math.max(0, a.time - now);
+    const total = a.total || remaining || 1;
+    const pct = remaining / total;
+    const r = 44;
+    const circ = 2 * Math.PI * r;
+    const offset = circ * (1 - pct);
+
+    const el = document.createElement('div');
+    el.className = 'countdown-clock';
+    el.dataset.alarmIndex = i;
+    el.innerHTML = `
+      <div class="countdown-crown"></div>
+      <button class="countdown-cancel" title="Cancel alarm">✕</button>
+      <svg viewBox="0 0 100 100">
+        <circle class="track" cx="50" cy="50" r="${r}"/>
+        <circle class="progress" cx="50" cy="50" r="${r}"
+          stroke-dasharray="${circ.toFixed(2)}" stroke-dashoffset="${offset.toFixed(2)}"/>
+      </svg>
+      <span class="countdown-time">${formatCountdown(remaining)}</span>
+      ${a.label ? `<span class="countdown-name">${a.label}</span>` : ''}
+      <button class="countdown-hide-btn">HIDE</button>`;
+
+    el.querySelector('.countdown-cancel').addEventListener('click', (e) => {
+      e.stopPropagation();
+      state.alarms.splice(i, 1);
+      saveState(state); renderCountdowns(); renderAlarmList(); updateAlarmBtn();
+    });
+    el.querySelector('.countdown-hide-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      state.alarms[i].muted = true;
+      saveState(state); renderCountdowns(); renderAlarmList();
+    });
+    container.appendChild(el);
+  });
+}
+
+// Tick countdowns every second
+setInterval(() => {
+  const now = Date.now();
+  document.querySelectorAll('.countdown-clock').forEach(el => {
+    const i = parseInt(el.dataset.alarmIndex);
+    const a = state.alarms && state.alarms[i];
+    if (!a) return;
+    const remaining = Math.max(0, a.time - now);
+    const total = a.total || remaining;
+    const pct = total > 0 ? remaining / total : 1;
+    const r = 44;
+    const circ = 2 * Math.PI * r;
+    const timeEl = el.querySelector('.countdown-time');
+    const prog = el.querySelector('.progress');
+    if (timeEl) timeEl.textContent = formatCountdown(remaining);
+    if (prog) prog.style.strokeDashoffset = circ * (1 - pct);
+  });
+}, 1000);
+
+renderCountdowns();
 
 const alarmPopup = document.getElementById('alarm-popup');
 document.getElementById('alarm-btn').addEventListener('click', () => {
@@ -1117,7 +1458,10 @@ document.getElementById('alarm-close').addEventListener('click', () => {
 document.querySelectorAll('.alarm-quick').forEach(btn => {
   btn.addEventListener('click', () => {
     const mins = parseInt(btn.dataset.mins);
-    addAlarm(mins * 60000, mins < 60 ? `${mins} min` : '1 hr');
+    const name = document.getElementById('alarm-name-input').value.trim();
+    const label = name || (mins < 60 ? `${mins} min` : '1 hr');
+    addAlarm(mins * 60000, label);
+    document.getElementById('alarm-name-input').value = '';
     alarmPopup.style.display = 'none';
   });
 });
@@ -1129,7 +1473,9 @@ document.getElementById('alarm-custom-set').addEventListener('click', () => {
   const now = new Date();
   const target = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, mm, 0);
   if (target <= now) target.setDate(target.getDate() + 1);
-  addAlarm(target - now, val);
+  const name = document.getElementById('alarm-name-input').value.trim();
+  addAlarm(target - now, name || val);
+  document.getElementById('alarm-name-input').value = '';
   document.getElementById('alarm-custom-input').value = '';
   alarmPopup.style.display = 'none';
 });
