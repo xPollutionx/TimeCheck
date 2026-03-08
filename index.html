@@ -146,6 +146,13 @@
   }
   #alarm-btn:hover { color: rgba(255,255,255,0.6); }
   #alarm-btn.has-alarms { color: rgba(255,180,0,0.6); }
+  @media (max-height: 500px) {
+    #alarm-popup > div { gap: 0.4rem; padding: 0.8rem; }
+    #mw-display { font-size: 1.8rem !important; }
+    .mw-key { padding: 0.3em !important; font-size: 0.9rem !important; }
+    #alarm-list { max-height: 80px !important; }
+  }
+
   @keyframes alarmPulse {
     from { transform: scale(1);   opacity: 1; }
     to   { transform: scale(1.3); opacity: 0.5; }
@@ -608,8 +615,8 @@
 </div>
 
 <!-- ALARM POPUP -->
-<div id="alarm-popup" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.88); z-index:300; align-items:center; justify-content:center;">
-  <div style="background:#0e0e0e; border:1px solid rgba(255,255,255,0.08); border-radius:16px; padding:1.5rem; width:min(92vw,380px); display:flex; flex-direction:column; gap:0.9rem; font-family:'Rajdhani',sans-serif;">
+<div id="alarm-popup" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.88); z-index:300; align-items:center; justify-content:center; overflow-y:auto;">
+  <div style="background:#0e0e0e; border:1px solid rgba(255,255,255,0.08); border-radius:16px; padding:1.5rem; width:min(92vw,380px); display:flex; flex-direction:column; gap:0.9rem; font-family:'Rajdhani',sans-serif; margin:auto; max-height:96vh; overflow-y:auto; box-sizing:border-box;">
 
     <!-- Digital display -->
     <div style="background:#000; border:2px solid rgba(255,255,255,0.06); border-radius:8px; padding:0.6em 1em; text-align:center; position:relative;">
@@ -742,14 +749,15 @@ function showSyncStatus(msg, color) {
   setTimeout(() => { el.style.opacity = '0'; }, 3000);
 }
 
-// Init — load state, always reset positions to start centered
+// Init — load state, preserve positions always locally
 let state = loadState();
 if (!state.events)        state.events = {};
 if (!state.mutedToday)    state.mutedToday = null;
 if (!state.mutedTomorrow) state.mutedTomorrow = null;
+if (!state.positions)     state.positions = {};
+if (!state.positionsLandscape) state.positionsLandscape = {};
 state.locked = true;
-state.positions = {};
-saveState(state);
+saveState(state, true); // skipCloud — positions are always local only
 
 // ── HELPERS ───────────────────────────────────────────────────────────────
 function dateKey(y, m, d) {
@@ -964,14 +972,33 @@ document.getElementById('modal-overlay').addEventListener('click', e => {
 // ── LOCK / UNLOCK ──────────────────────────────────────────────────────────
 const lockBtn = document.getElementById('lock-btn');
 
+// ── ORIENTATION-AWARE POSITIONS ────────────────────────────────────────────
+function isLandscape() {
+  return window.innerWidth > window.innerHeight;
+}
+function getPositions() {
+  return isLandscape() ? (state.positionsLandscape || {}) : (state.positions || {});
+}
+function setPositionKey(key, val) {
+  if (isLandscape()) {
+    if (!state.positionsLandscape) state.positionsLandscape = {};
+    state.positionsLandscape[key] = val;
+  } else {
+    if (!state.positions) state.positions = {};
+    state.positions[key] = val;
+  }
+}
+
 function applyPositions() {
+  const pos = getPositions();
   document.querySelectorAll('.draggable-target').forEach(el => {
-    const saved = state.positions && state.positions[el.dataset.key];
+    const saved = pos[el.dataset.key];
     if (saved) {
       el.style.position = 'fixed';
       el.style.left = saved.x + 'px';
       el.style.top  = saved.y + 'px';
       if (saved.scale) el.style.transform = `scale(${saved.scale})`;
+      else el.style.transform = '';
     } else {
       el.style.position = '';
       el.style.left = '';
@@ -980,6 +1007,11 @@ function applyPositions() {
     }
   });
 }
+
+// Re-apply positions on orientation change
+window.addEventListener('resize', () => {
+  applyPositions();
+});
 
 function applyLock() {
   const targets = document.querySelectorAll('.draggable-target');
@@ -1037,12 +1069,12 @@ document.addEventListener('mousemove', e => {
 
 document.addEventListener('mouseup', e => {
   if (!dragging) return;
-  if (!state.positions) state.positions = {};
-  state.positions[dragging.dataset.key] = {
+  setPositionKey(dragging.dataset.key, {
     x: parseInt(dragging.style.left),
-    y: parseInt(dragging.style.top)
-  };
-  saveState(state);
+    y: parseInt(dragging.style.top),
+    scale: getPositions()[dragging.dataset.key]?.scale
+  });
+  saveState(state, true);
   dragging.style.zIndex = '';
   dragging = null;
 });
@@ -1069,12 +1101,12 @@ document.addEventListener('touchmove', e => {
 
 document.addEventListener('touchend', () => {
   if (!dragging) return;
-  if (!state.positions) state.positions = {};
-  state.positions[dragging.dataset.key] = {
+  setPositionKey(dragging.dataset.key, {
     x: parseInt(dragging.style.left),
-    y: parseInt(dragging.style.top)
-  };
-  saveState(state);
+    y: parseInt(dragging.style.top),
+    scale: getPositions()[dragging.dataset.key]?.scale
+  });
+  saveState(state, true);
   dragging = null;
 });
 
@@ -1107,11 +1139,11 @@ document.addEventListener('mousemove', e => {
 document.addEventListener('mouseup', e => {
   if (!resizing) return;
   const key = resizing.dataset.key;
-  if (!state.positions) state.positions = {};
-  if (!state.positions[key]) state.positions[key] = { x: 0, y: 0 };
   const scaleMatch = resizing.style.transform.match(/scale\(([^)]+)\)/);
-  state.positions[key].scale = scaleMatch ? parseFloat(scaleMatch[1]) : 1;
-  saveState(state);
+  const scale = scaleMatch ? parseFloat(scaleMatch[1]) : 1;
+  const existing = getPositions()[key] || { x: 0, y: 0 };
+  setPositionKey(key, { ...existing, scale });
+  saveState(state, true);
   resizing = null;
 });
 
@@ -1135,18 +1167,19 @@ document.addEventListener('touchmove', e => {
 document.addEventListener('touchend', () => {
   if (!resizing) return;
   const key = resizing.dataset.key;
-  if (!state.positions) state.positions = {};
-  if (!state.positions[key]) state.positions[key] = { x: 0, y: 0 };
   const scaleMatch = resizing.style.transform.match(/scale\(([^)]+)\)/);
-  state.positions[key].scale = scaleMatch ? parseFloat(scaleMatch[1]) : 1;
-  saveState(state);
+  const scale = scaleMatch ? parseFloat(scaleMatch[1]) : 1;
+  const existing = getPositions()[key] || { x: 0, y: 0 };
+  setPositionKey(key, { ...existing, scale });
+  saveState(state, true);
   resizing = null;
 });
 
 // ── RESET LAYOUT ───────────────────────────────────────────────────────────
 document.getElementById('reset-btn').addEventListener('click', () => {
-  state.positions = {};
-  saveState(state);
+  if (isLandscape()) state.positionsLandscape = {};
+  else state.positions = {};
+  saveState(state, true);
   document.querySelectorAll('.draggable-target').forEach(el => {
     el.style.position = '';
     el.style.left = '';
@@ -1448,6 +1481,7 @@ renderCountdowns();
 
 const alarmPopup = document.getElementById('alarm-popup');
 document.getElementById('alarm-btn').addEventListener('click', () => {
+  mwInput = ''; mwUpdateDisplay();
   renderAlarmList();
   alarmPopup.style.display = 'flex';
 });
@@ -1462,6 +1496,7 @@ document.querySelectorAll('.alarm-quick').forEach(btn => {
     const label = name || (mins < 60 ? `${mins} min` : '1 hr');
     addAlarm(mins * 60000, label);
     document.getElementById('alarm-name-input').value = '';
+    mwInput = ''; mwUpdateDisplay();
     alarmPopup.style.display = 'none';
   });
 });
@@ -1477,6 +1512,7 @@ document.getElementById('alarm-custom-set').addEventListener('click', () => {
   addAlarm(target - now, name || val);
   document.getElementById('alarm-name-input').value = '';
   document.getElementById('alarm-custom-input').value = '';
+  mwInput = ''; mwUpdateDisplay();
   alarmPopup.style.display = 'none';
 });
 
