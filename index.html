@@ -586,53 +586,46 @@ function loadState() {
 }
 
 // ── GIST SYNC ──────────────────────────────────────────────────────────────
-async function syncToGist(s) {
+const JSONBIN_ID  = '69acda6eae596e708f6b5846';
+const JSONBIN_KEY = '$2a$10$wHr/ktVaQS.jffGoBR7ppeFI3ZZ3kfKKgXEFC5jdgkBbNZwFFIoNO';
+const JSONBIN_URL = `https://api.jsonbin.io/v3/b/${JSONBIN_ID}`;
+
+async function syncToCloud(s) {
   try {
-    const res = await fetch(`https://api.github.com/gists/${s.gistId}`, {
-      method: 'PATCH',
-      mode: 'cors',
+    const res = await fetch(JSONBIN_URL, {
+      method: 'PUT',
       headers: {
-        'Authorization': `Bearer ${s.gistToken}`,
         'Content-Type': 'application/json',
-        'Accept': 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28'
+        'X-Master-Key': JSONBIN_KEY
       },
-      body: JSON.stringify({ files: { 'timecheck-data.json': { content: JSON.stringify({ events: s.events }) } } })
+      body: JSON.stringify({ events: s.events })
     });
     if (res.ok) showSyncStatus('✓ Synced', '#aaa');
-    else { const err = await res.json(); showSyncStatus('✗ Sync failed', '#ff3b3b'); console.warn('Gist PATCH failed:', err); }
-  } catch(e) { showSyncStatus('✗ Sync failed', '#ff3b3b'); console.warn('Gist sync error:', e); }
+    else showSyncStatus('✗ Sync failed', '#ff3b3b');
+  } catch(e) { showSyncStatus('✗ Sync failed', '#ff3b3b'); console.warn('Sync error:', e); }
 }
 
-// Only events go to Gist — positions/UI prefs stay local only
-function saveState(s, skipGist) {
-  localStorage.setItem('timecheck', JSON.stringify(s));
-  if (!skipGist && s.gistId && s.gistToken) syncToGist(s);
-}
-
-async function loadFromGist(gistId, token) {
+async function loadFromCloud() {
   try {
-    const r = await fetch(`https://api.github.com/gists/${gistId}`, {
-      mode: 'cors',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Accept': 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28'
-      }
+    const r = await fetch(`${JSONBIN_URL}/latest`, {
+      headers: { 'X-Master-Key': JSONBIN_KEY }
     });
-    if (!r.ok) { const err = await r.json(); showSyncStatus('✗ Sync failed', '#ff3b3b'); console.warn('Gist GET failed:', err); return; }
+    if (!r.ok) { showSyncStatus('✗ Sync failed', '#ff3b3b'); return; }
     const data = await r.json();
-    const content = data.files?.['timecheck-data.json']?.content;
-    if (content) {
-      const remote = JSON.parse(content);
-      if (remote.events) {
-        state.events = remote.events;
-        saveState(state, true);
-      }
+    if (data.record?.events) {
+      state.events = data.record.events;
+      saveState(state, true);
     }
     showSyncStatus('✓ Synced', '#aaa');
-  } catch(e) { showSyncStatus('✗ Sync failed', '#ff3b3b'); console.warn('Gist load error:', e); }
+  } catch(e) { showSyncStatus('✗ Sync failed', '#ff3b3b'); console.warn('Load error:', e); }
 }
+
+function saveState(s, skipCloud) {
+  localStorage.setItem('timecheck', JSON.stringify(s));
+  if (!skipCloud && s.cloudSync) syncToCloud(s);
+}
+
+async function loadFromGist(gistId, token) {}  // kept for compat, unused
 
 function showSyncStatus(msg, color) {
   let el = document.getElementById('sync-status');
@@ -996,14 +989,14 @@ document.getElementById('sync-save').addEventListener('click', async () => {
   syncPanel.style.display = 'none';
 });
 
-// Load from Gist on startup if configured
-if (state.gistId && state.gistToken) {
-  loadFromGist(state.gistId, state.gistToken).then(() => { updateClock(); });
+// Load from cloud on startup if sync enabled
+if (state.cloudSync) {
+  loadFromCloud().then(() => { updateClock(); });
 }
 
-// Auto-sync every 60 seconds to keep devices in step
+// Auto-sync every 60 seconds
 setInterval(() => {
-  if (state.gistId && state.gistToken) loadFromGist(state.gistId, state.gistToken);
+  if (state.cloudSync) loadFromCloud();
 }, 60000);
 
 // ── ALARMS ─────────────────────────────────────────────────────────────────
@@ -1273,11 +1266,10 @@ function showMagicSyncPrompt() {
 }
 
 document.getElementById('magic-sync-yes').addEventListener('click', async () => {
-  state.gistToken = MAGIC_TOKEN;
-  state.gistId    = MAGIC_GIST_ID;
-  saveState(state);
+  state.cloudSync = true;
+  saveState(state, true);
   document.getElementById('magic-sync-overlay').style.display = 'none';
-  await loadFromGist(MAGIC_GIST_ID, MAGIC_TOKEN);
+  await loadFromCloud();
   updateClock();
 });
 
