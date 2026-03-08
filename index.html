@@ -590,12 +590,18 @@ async function syncToGist(s) {
   try {
     const res = await fetch(`https://api.github.com/gists/${s.gistId}`, {
       method: 'PATCH',
-      headers: { 'Authorization': `token ${s.gistToken}`, 'Content-Type': 'application/json' },
+      mode: 'cors',
+      headers: {
+        'Authorization': `Bearer ${s.gistToken}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28'
+      },
       body: JSON.stringify({ files: { 'timecheck-data.json': { content: JSON.stringify({ events: s.events }) } } })
     });
     if (res.ok) showSyncStatus('✓ Synced', '#aaa');
-    else showSyncStatus('✗ Sync failed', '#ff3b3b');
-  } catch(e) { showSyncStatus('✗ Sync failed', '#ff3b3b'); }
+    else { const err = await res.json(); showSyncStatus('✗ Sync failed', '#ff3b3b'); console.warn('Gist PATCH failed:', err); }
+  } catch(e) { showSyncStatus('✗ Sync failed', '#ff3b3b'); console.warn('Gist sync error:', e); }
 }
 
 // Only events go to Gist — positions/UI prefs stay local only
@@ -607,20 +613,25 @@ function saveState(s, skipGist) {
 async function loadFromGist(gistId, token) {
   try {
     const r = await fetch(`https://api.github.com/gists/${gistId}`, {
-      headers: { 'Authorization': `token ${token}` }
+      mode: 'cors',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28'
+      }
     });
-    if (!r.ok) { showSyncStatus('✗ Sync failed', '#ff3b3b'); return; }
+    if (!r.ok) { const err = await r.json(); showSyncStatus('✗ Sync failed', '#ff3b3b'); console.warn('Gist GET failed:', err); return; }
     const data = await r.json();
     const content = data.files?.['timecheck-data.json']?.content;
     if (content) {
       const remote = JSON.parse(content);
       if (remote.events) {
         state.events = remote.events;
-        saveState(state, true); // skipGist — avoid loop
+        saveState(state, true);
       }
     }
     showSyncStatus('✓ Synced', '#aaa');
-  } catch(e) { showSyncStatus('✗ Sync failed', '#ff3b3b'); }
+  } catch(e) { showSyncStatus('✗ Sync failed', '#ff3b3b'); console.warn('Gist load error:', e); }
 }
 
 function showSyncStatus(msg, color) {
