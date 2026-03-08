@@ -588,34 +588,38 @@ function loadState() {
 // ── GIST SYNC ──────────────────────────────────────────────────────────────
 async function syncToGist(s) {
   try {
-    await fetch(`https://api.github.com/gists/${s.gistId}`, {
+    const res = await fetch(`https://api.github.com/gists/${s.gistId}`, {
       method: 'PATCH',
       headers: { 'Authorization': `token ${s.gistToken}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ files: { 'timecheck-data.json': { content: JSON.stringify({ events: s.events }) } } })
     });
-  } catch(e) { console.warn('Gist sync failed:', e); }
+    if (res.ok) showSyncStatus('✓ Synced', '#aaa');
+    else showSyncStatus('✗ Sync failed', '#ff3b3b');
+  } catch(e) { showSyncStatus('✗ Sync failed', '#ff3b3b'); }
 }
 
 // Only events go to Gist — positions/UI prefs stay local only
-function saveState(s) {
+function saveState(s, skipGist) {
   localStorage.setItem('timecheck', JSON.stringify(s));
-  if (s.gistId && s.gistToken) syncToGist(s);
+  if (!skipGist && s.gistId && s.gistToken) syncToGist(s);
 }
-
-
 
 async function loadFromGist(gistId, token) {
   try {
     const r = await fetch(`https://api.github.com/gists/${gistId}`, {
       headers: { 'Authorization': `token ${token}` }
     });
+    if (!r.ok) { showSyncStatus('✗ Sync failed', '#ff3b3b'); return; }
     const data = await r.json();
     const content = data.files?.['timecheck-data.json']?.content;
     if (content) {
       const remote = JSON.parse(content);
-      if (remote.events) { state.events = remote.events; saveState(state); }
+      if (remote.events) {
+        state.events = remote.events;
+        saveState(state, true); // skipGist — avoid loop
+      }
     }
-    showSyncStatus('✓ Synced', '#00c853');
+    showSyncStatus('✓ Synced', '#aaa');
   } catch(e) { showSyncStatus('✗ Sync failed', '#ff3b3b'); }
 }
 
@@ -674,7 +678,7 @@ function updateClock() {
 
   // Date D/M/YY - no leading zeros
   const yy = String(now.getFullYear()).slice(2);
-  elDate.textContent = `${now.getDate()}/${now.getMonth()+1}/${yy}`;
+  elDate.textContent = `${now.getMonth()+1}/${now.getDate()}/${yy}`;
 
   // Time - 12 hour, no leading zero, split for colon gap control
   const h = now.getHours();
@@ -985,6 +989,11 @@ document.getElementById('sync-save').addEventListener('click', async () => {
 if (state.gistId && state.gistToken) {
   loadFromGist(state.gistId, state.gistToken).then(() => { updateClock(); });
 }
+
+// Auto-sync every 60 seconds to keep devices in step
+setInterval(() => {
+  if (state.gistId && state.gistToken) loadFromGist(state.gistId, state.gistToken);
+}, 60000);
 
 // ── ALARMS ─────────────────────────────────────────────────────────────────
 if (!state.alarms) { state.alarms = []; saveState(state); }
