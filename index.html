@@ -123,7 +123,7 @@
     letter-spacing: -0.03em;
     transition: text-shadow 0.8s ease;
   }
-  #time-colon { margin: 0 0.04em; }
+  #time-colon { margin: 0 -0.01em; }
 
   #ampm {
     font-family: 'Orbitron', monospace;
@@ -177,51 +177,25 @@
   }
   .mute-btn:hover { opacity: 1; }
 
-  /* Lock icon */
-  #lock-btn {
+  /* Bottom controls row */
+  #controls {
     position: fixed;
     bottom: 1.5rem; right: 1.5rem;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 1.5rem;
+    z-index: 200;
+  }
+  #controls button {
     background: none; border: none; cursor: pointer;
     font-size: clamp(1rem, 2vw, 1.5rem);
     color: rgba(255,255,255,0.08);
     transition: color 0.2s;
-    z-index: 200;
+    padding: 0;
   }
-  #lock-btn:hover { color: rgba(255,255,255,0.5); }
+  #controls button:hover { color: rgba(255,255,255,0.5); }
   #lock-btn.unlocked { color: rgba(255,255,255,0.55); }
-
-  #fullscreen-btn {
-    position: fixed;
-    bottom: 1.5rem; right: 4rem;
-    background: none; border: none; cursor: pointer;
-    font-size: clamp(1rem, 2vw, 1.5rem);
-    color: rgba(255,255,255,0.08);
-    transition: color 0.2s;
-    z-index: 200;
-  }
-  #fullscreen-btn:hover { color: rgba(255,255,255,0.5); }
-
-  #reset-btn {
-    position: fixed;
-    bottom: 1.5rem; right: 7rem;
-    background: none; border: none; cursor: pointer;
-    font-size: clamp(1rem, 2vw, 1.5rem);
-    color: rgba(255,255,255,0.08);
-    transition: color 0.2s;
-    z-index: 200;
-  }
-  #reset-btn:hover { color: rgba(255,255,255,0.5); }
-
-  #wakelock-btn {
-    position: fixed;
-    bottom: 1.5rem; right: 14rem;
-    background: none; border: none; cursor: pointer;
-    font-size: clamp(1rem, 2vw, 1.5rem);
-    color: rgba(255,255,255,0.08);
-    transition: color 0.2s;
-    z-index: 200;
-  }
-  #wakelock-btn:hover { color: rgba(255,255,255,0.5); }
   #wakelock-btn.active { color: rgba(255,255,255,0.45); }
 
 
@@ -559,20 +533,14 @@
   </div>
 </div>
 
-<!-- SYNC BUTTON -->
-<!-- WAKE LOCK BUTTON -->
-<button id="wakelock-btn" title="Keep screen awake">☀</button>
-
-<button id="sync-btn" title="Cloud Sync Settings" style="position:fixed; bottom:1.5rem; right:10.5rem; background:none; border:none; cursor:pointer; font-size:clamp(1rem,2vw,1.5rem); color:rgba(255,255,255,0.08); transition:color 0.2s; z-index:200;">☁</button>
-
-<!-- FULLSCREEN BUTTON -->
-<button id="fullscreen-btn" title="Toggle Fullscreen">⛶</button>
-
-<!-- LOCK BUTTON -->
-<button id="lock-btn" title="Lock / Unlock layout">🔒</button>
-
-<!-- RESET BUTTON -->
-<button id="reset-btn" title="Reset layout to default">◎</button>
+<!-- BOTTOM CONTROLS -->
+<div id="controls">
+  <button id="sync-btn"       title="Cloud Sync Active" style="display:none;">☁</button>
+  <button id="wakelock-btn"   title="Keep screen awake">☀</button>
+  <button id="reset-btn"      title="Reset layout">◎</button>
+  <button id="fullscreen-btn" title="Toggle Fullscreen">⛶</button>
+  <button id="lock-btn"       title="Lock / Unlock layout">🔒</button>
+</div>
 
 <script>
 // ── STATE ──────────────────────────────────────────────────────────────────
@@ -971,22 +939,19 @@ document.getElementById('reset-btn').addEventListener('click', () => {
 
 // ── SYNC PANEL ─────────────────────────────────────────────────────────────
 const syncPanel = document.getElementById('sync-panel');
+// Show/hide sync btn based on cloudSync state
+function updateSyncBtn() {
+  document.getElementById('sync-btn').style.display = state.cloudSync ? 'block' : 'none';
+}
+updateSyncBtn();
+
 document.getElementById('sync-btn').addEventListener('click', () => {
-  document.getElementById('gist-token-input').value = state.gistToken || '';
-  document.getElementById('gist-id-input').value = state.gistId || '';
-  syncPanel.style.display = 'flex';
-});
-document.getElementById('sync-close').addEventListener('click', () => { syncPanel.style.display = 'none'; });
-document.getElementById('sync-save').addEventListener('click', async () => {
-  const token = document.getElementById('gist-token-input').value.trim();
-  const gistId = document.getElementById('gist-id-input').value.trim();
-  if (token && gistId) {
-    state.gistToken = token; state.gistId = gistId;
-    saveState(state);
-    await loadFromGist(gistId, token);
-    updateClock(); renderCal && renderCal();
+  if (confirm('Disconnect from cloud sync?')) {
+    state.cloudSync = false;
+    saveState(state, true);
+    updateSyncBtn();
+    showSyncStatus('Cloud sync off', '#aaa');
   }
-  syncPanel.style.display = 'none';
 });
 
 // Load from cloud on startup if sync enabled
@@ -1269,6 +1234,7 @@ document.getElementById('magic-sync-yes').addEventListener('click', async () => 
   state.cloudSync = true;
   saveState(state, true);
   document.getElementById('magic-sync-overlay').style.display = 'none';
+  updateSyncBtn();
   await loadFromCloud();
   updateClock();
 });
