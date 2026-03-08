@@ -1272,7 +1272,7 @@ function resetCursorTimer() {
   clearTimeout(cursorTimer);
   cursorTimer = setTimeout(() => {
     document.body.style.cursor = 'none';
-  }, 30000);
+  }, 6000);
 }
 document.addEventListener('mousemove', resetCursorTimer);
 document.addEventListener('mousedown', resetCursorTimer);
