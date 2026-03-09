@@ -205,6 +205,68 @@
   #lock-btn.unlocked { color: rgba(255,255,255,0.55); }
   #wakelock-btn.active { color: rgba(255,255,255,0.45); }
 
+  /* Cog menu — mobile portrait only */
+  #cog-menu {
+    display: none;
+  }
+
+  @media (max-width: 600px) and (orientation: portrait) {
+    /* Hide bottom controls */
+    #controls {
+      display: none;
+    }
+
+    /* Show cog menu in top right */
+    #cog-menu {
+      display: block;
+      position: fixed;
+      top: 1rem; right: 1rem;
+      z-index: 200;
+    }
+
+    #cog-toggle {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 50%;
+      width: 36px; height: 36px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      color: rgba(255,255,255,0.35);
+      font-size: 1.1rem;
+      transition: background 0.2s, color 0.2s;
+    }
+    #cog-toggle:hover, #cog-toggle.open {
+      background: rgba(255,255,255,0.12);
+      color: rgba(255,255,255,0.7);
+    }
+
+    #cog-panel {
+      display: none;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 0.6rem;
+      margin-top: 0.5rem;
+    }
+    #cog-panel.open {
+      display: flex;
+    }
+    #cog-panel button {
+      background: rgba(20,20,20,0.92);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px;
+      color: rgba(255,255,255,0.5);
+      font-size: 1rem;
+      padding: 0.45em 0.8em;
+      cursor: pointer;
+      font-family: 'Rajdhani', sans-serif;
+      letter-spacing: 0.08em;
+      display: flex; align-items: center; gap: 0.5em;
+      white-space: nowrap;
+      transition: background 0.2s, color 0.2s;
+    }
+    #cog-panel button:hover { background: rgba(40,40,40,0.98); color: #fff; }
+  }
+
 
   /* Resize handle - appears on unlocked elements */
   .draggable { cursor: move; outline: 1px dashed rgba(255,255,255,0.12); border-radius: 4px; padding: 4px 8px; }
@@ -685,6 +747,18 @@
   <button id="reset-btn"      title="Reset layout">◎</button>
   <button id="fullscreen-btn" title="Toggle Fullscreen">⛶</button>
   <button id="lock-btn"       title="Lock / Unlock layout">🔒</button>
+</div>
+
+<!-- COG MENU — mobile portrait only -->
+<div id="cog-menu">
+  <button id="cog-toggle" title="Settings">⚙</button>
+  <div id="cog-panel">
+    <button id="cog-wakelock">☀ Wake Lock</button>
+    <button id="cog-reset">◎ Reset Layout</button>
+    <button id="cog-fullscreen">⛶ Fullscreen</button>
+    <button id="cog-lock">🔒 Unlock</button>
+    <button id="cog-sync" style="display:none;">☁ Cloud Sync</button>
+  </div>
 </div>
 
 <script>
@@ -1694,9 +1768,66 @@ document.addEventListener('fullscreenchange', () => {
   fsBtn.textContent = document.fullscreenElement ? '✕' : '⛶';
 });
 
-// Init — always clear positions so elements start centered
-state.positions = {};
-saveState(state);
+// ── COG MENU (mobile portrait) ─────────────────────────────────────────────
+(function() {
+  const cogToggle = document.getElementById('cog-toggle');
+  const cogPanel  = document.getElementById('cog-panel');
+  if (!cogToggle) return;
+
+  cogToggle.addEventListener('click', e => {
+    e.stopPropagation();
+    const open = cogPanel.classList.toggle('open');
+    cogToggle.classList.toggle('open', open);
+  });
+
+  document.addEventListener('click', e => {
+    if (!document.getElementById('cog-menu').contains(e.target)) {
+      cogPanel.classList.remove('open');
+      cogToggle.classList.remove('open');
+    }
+  });
+
+  function closeCog() {
+    cogPanel.classList.remove('open');
+    cogToggle.classList.remove('open');
+  }
+
+  document.getElementById('cog-wakelock').addEventListener('click', () => {
+    document.getElementById('wakelock-btn').click();
+    const on = document.getElementById('wakelock-btn').classList.contains('active');
+    document.getElementById('cog-wakelock').textContent = on ? '☀ Wake Lock ON' : '☀ Wake Lock';
+    closeCog();
+  });
+
+  document.getElementById('cog-reset').addEventListener('click', () => {
+    document.getElementById('reset-btn').click();
+    closeCog();
+  });
+
+  document.getElementById('cog-fullscreen').addEventListener('click', () => {
+    document.getElementById('fullscreen-btn').click();
+    closeCog();
+  });
+
+  document.getElementById('cog-lock').addEventListener('click', () => {
+    document.getElementById('lock-btn').click();
+    const unlocked = state && !state.locked;
+    document.getElementById('cog-lock').textContent = unlocked ? '🔓 Lock' : '🔒 Unlock';
+    closeCog();
+  });
+
+  document.getElementById('cog-sync').addEventListener('click', () => {
+    document.getElementById('sync-btn').click();
+    closeCog();
+  });
+
+  const syncObserver = new MutationObserver(() => {
+    const visible = document.getElementById('sync-btn').style.display !== 'none';
+    document.getElementById('cog-sync').style.display = visible ? 'flex' : 'none';
+  });
+  syncObserver.observe(document.getElementById('sync-btn'), { attributes: true, attributeFilter: ['style'] });
+})();
+
 applyLock();
 </script>
 </body>
